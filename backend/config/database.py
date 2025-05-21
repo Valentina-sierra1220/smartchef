@@ -19,4 +19,4 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Base: clase base que usarán todos nuestros modelos (tablas)
-Base = declarative_base()
+Base = declarative_base()         
