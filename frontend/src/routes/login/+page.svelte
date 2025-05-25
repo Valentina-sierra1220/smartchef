@@ -1,4 +1,6 @@
 <script lang="ts">
+import { registerUser, loginUser } from '$lib/api';
+
   let modo = 'login';
   let nombre = '';
   let correo = '';
@@ -7,40 +9,31 @@
   let mensaje = '';
 
   const handleSubmit = async () => {
-    error = '';
     mensaje = '';
-
-    const url = modo === 'login'
-      ? 'http://localhost:5000/login'
-      : 'http://localhost:5000/register';
-
-    const body = modo === 'login'
-      ? { correo, contraseña }
-      : { nombre, correo, contraseña };
+    error = '';
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        mensaje = data.mensaje;
-        if (modo === 'register') {
-          modo = 'login';
-          nombre = '';
-        }
+      if (modo === 'register') {
+        const response = await registerUser(nombre, correo, contraseña);
+        mensaje = response;
+        modo = 'login';
       } else {
-        error = data.error || 'Error desconocido';
+        const response = await loginUser(correo, contraseña);
+        mensaje = response;
+        // Aquí podrías redirigir al home: window.location.href = '/home';
+        window.location.href = '/home';
       }
-    } catch (e) {
-      error = 'No se pudo conectar con el servidor';
+    } catch (err) {
+      if (err instanceof Error) {
+        error = err.message;
+      } else {
+        error = 'Ocurrió un error inesperado';
+      }
     }
   };
 </script>
+
+     
 
 <div class="min-h-screen flex items-center justify-center bg-gray-100 px-4">
   <div class="w-full max-w-md bg-white p-8 rounded-2xl shadow-lg">
