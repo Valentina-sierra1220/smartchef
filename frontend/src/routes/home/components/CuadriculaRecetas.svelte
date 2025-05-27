@@ -1,13 +1,5 @@
 <script lang="ts">
-   type Receta = {
-    id?: string;
-    titulo: string;
-    autor: string;
-    imagen?: string;
-    descripcion?: string;
-    ingredientes?: string[];
-    pasos?: string[];
-  };
+  import type { Receta } from '$model/Receta';
 
   export let recetas: Receta[] = [];
   export let abrirModal: (receta: Receta) => void;
@@ -23,8 +15,8 @@
       <div class="card">
         <img src={receta.imagen || '/imagen-default.png'} alt="imagen por defecto" />
         <div class="card-content">
-          <div class="receta-titulo">{receta.titulo}</div>
-          <div class="receta-autor">por {receta.autor}</div>
+          <div class="receta-titulo">{receta.nombre}</div>
+          <div class="receta-autor">por {receta.creador}</div>
           <button
             class="mt-4 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold"
             on:click={() => abrirModal(receta)}

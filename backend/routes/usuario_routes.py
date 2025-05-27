@@ -46,11 +46,17 @@ def login():
     try:
         usuario = db.query(Usuario).filter_by(correo=correo).first()
         if usuario and usuario.verificar_contraseña(contraseña):
-            return jsonify({"mensaje": "Inicio de sesión exitoso"})
+            return jsonify({
+                "mensaje": "Inicio de sesión exitoso",
+                "id_usuario": usuario.id,
+                "nombre": usuario.nombre,
+                "correo": usuario.correo
+            }), 200
         else:
             return jsonify({"error": "Credenciales incorrectas"}), 401
     finally:
         db.close()
+
 
 @usuario_bp.route("/user", methods=["GET"])
 def listar_usuarios():

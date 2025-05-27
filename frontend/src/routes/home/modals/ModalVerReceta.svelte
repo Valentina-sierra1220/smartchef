@@ -1,165 +1,105 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher } from 'svelte';
+	import type { Receta } from '$model/Receta';
+	import { construirUrlImagen } from '$lib/url';
+	import { Usuario } from '$model/Usuario';
 
-  type Receta = {
-    id?: string;
-    titulo: string;
-    autor: string;
-    imagen?: string;
-    descripcion?: string;
-    ingredientes?: string[];
-    pasos?: string[];
-  };
+	export let show = false;
+	export let receta: Receta;
+	export let onClose: () => void;
+	export let usuario: Usuario;
 
-  export let show = false;
-  export let receta: Receta;
-  export let onClose: () => void;
+	const dispatch = createEventDispatcher();
 
-  const dispatch = createEventDispatcher();
-
-  let imagenPreview = '';
-  let imagenTemp = '';
-  let editando = false;
-  let yaCompartida = false;
-
-  let titulo = '';
-  let autor = '';
-  let descripcion = '';
-  let ingredientes = '';
-  let pasos = '';
-  let mensaje = '';
-
-  $: if (show && receta && !editando) {
-    titulo = receta.titulo;
-    autor = receta.autor;
-    descripcion = receta.descripcion || '';
-    ingredientes = (receta.ingredientes ?? []).join(', ');
-    pasos = (receta.pasos ?? []).join('\n');
-    imagenTemp = receta.imagen || '';
-    imagenPreview = receta.imagen || '';
-    mensaje = '';
-  }
-
-  function handleFileChange(event: Event) {
-    const file = (event.target as HTMLInputElement)?.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        imagenTemp = reader.result as string;
-        imagenPreview = imagenTemp;
-      };
-      reader.readAsDataURL(file);
-    }
-  }
-
-  function compartirReceta() {
-    if (yaCompartida) {
-      mensaje = '⚠️ Ya se compartió esta receta.';
-      return;
-    }
-
-    dispatch('compartir', {
-      ...receta,
-      imagen: imagenTemp
-    });
-
-    yaCompartida = true;
-    mensaje = '✅ Receta compartida.';
-  }
-
-  function habilitarEdicion() {
-    editando = true;
-  }
-
-  function guardarCambios() {
-    const editada = {
-      ...receta,
-      titulo: titulo.trim(),
-      autor: autor.trim(),
-      descripcion: descripcion.trim(),
-      ingredientes: ingredientes.split(',').map(i => i.trim()).filter(Boolean),
-      pasos: pasos.split('\n').map(p => p.trim()).filter(Boolean),
-      imagen: imagenTemp
-    };
-    dispatch('editado', editada);
-    mensaje = '✅ Cambios guardados.';
-    editando = false;
-  }
+	const compartirReceta = () => dispatch('compartir', receta);
+	const editar = () => dispatch('editar', receta);
+	const esPropia = receta.id_usuario.toString() === usuario.id.toString();
+	const esPublica = receta.publica;
 </script>
 
 {#if show}
-  <div class="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
-    <div class="bg-white rounded-lg p-6 w-full max-w-md relative shadow-xl overflow-y-auto max-h-[90vh]">
-      <button on:click={onClose} class="absolute top-3 right-3 text-gray-400 hover:text-gray-800 text-xl">×</button>
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+		<div class="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+			<!-- Header con título centrado y botón cerrar alineado -->
+			<div class="relative flex items-center justify-center border-b p-4">
+				<h2 class="w-full text-center text-lg font-semibold">{receta.nombre}</h2>
+				<button
+					on:click={onClose}
+					class="absolute right-4 top-4 text-xl text-gray-500 hover:text-gray-800">×</button
+				>
+			</div>
 
-      <div class="w-full flex flex-col items-center mb-4">
-        {#if imagenPreview}
-          <img src={imagenPreview} alt="Imagen de receta" class="rounded-md max-h-[300px] w-auto object-contain" />
-        {:else}
-          <div class="w-full h-[200px] bg-gray-100 flex items-center justify-center text-gray-400 rounded-md">
-            📷 No se ha cargado imagen
-          </div>
-        {/if}
+			<!-- 🔹 Imagen -->
+			{#if receta.imagenes.length > 0}
+				<img
+					src={construirUrlImagen(receta.imagenes[0].url)}
+					alt="Receta"
+					class="h-48 w-full object-cover"
+				/>
+			{:else}
+				<div class="flex h-48 w-full items-center justify-center bg-gray-100 text-gray-400">
+					📷 Sin imagen
+				</div>
+			{/if}
 
-        <input
-          type="file"
-          accept="image/*"
-          on:change={handleFileChange}
-          class="mt-4 text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-        />
-      </div>
+			<div class="p-6">
+				<!-- 🔹 Info alineada izquierda -->
+				<div class="mb-4 flex gap-4 text-sm text-gray-600">
+					<span>⏱️ {receta.tiempo}</span>
+					<span>🍽️ {receta.porciones} porciones</span>
+					<span>{receta.publica ? '🌐 Pública' : '🔒 Privada'}</span>
+				</div>
 
-      {#if editando}
-        <input bind:value={titulo} class="w-full p-2 border rounded mb-2 text-sm" placeholder="Título" />
-        <input bind:value={autor} class="w-full p-2 border rounded mb-2 text-sm" placeholder="Autor" />
-        <textarea bind:value={descripcion} class="w-full p-2 border rounded mb-2 text-sm" placeholder="Descripción"></textarea>
-        <textarea bind:value={ingredientes} class="w-full p-2 border rounded mb-2 text-sm" placeholder="Ingredientes (separados por comas)"></textarea>
-        <textarea bind:value={pasos} class="w-full p-2 border rounded mb-4 text-sm" placeholder="Pasos (cada uno en una línea)"></textarea>
+				<!-- 🔹 Descripción -->
+				<h3 class="mb-1 text-sm font-semibold">Descripción</h3>
+				<p class="mb-4 text-sm text-gray-700">{receta.descripcion}</p>
 
-        <button on:click={guardarCambios} class="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 text-sm font-semibold">
-          Guardar cambios
-        </button>
-      {:else}
-        <h2 class="text-lg font-semibold mb-2">{receta.titulo}</h2>
-        <p class="text-sm text-gray-600 mb-4">{receta.descripcion}</p>
+				<!-- 🔹 Instrucciones -->
+				<h3 class="mb-1 text-sm font-semibold">Instrucciones</h3>
+				<ol class="ml-5 list-decimal space-y-1 text-sm text-gray-700">
+					{#each receta.instrucciones.split('\n').filter((p) => p.trim()) as paso}
+						<li>{paso}</li>
+					{/each}
+				</ol>
 
-        <div class="mb-6">
-          <h3 class="font-medium">🥣 Ingredientes</h3>
-          <ul class="list-disc ml-5 text-sm mb-4">
-            {#each receta.ingredientes ?? [] as i}<li>{i}</li>{/each}
-          </ul>
+				<!-- 🔹 Botones -->
+				<div class="mt-6 flex flex-col gap-3">
+					{#if esPropia}
+						<div class="mt-6 flex gap-2">
+							{#if receta.publica}
+								<button
+									on:click={print}
+									class="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+									>🔒 Privada</button
+								>
+							{:else}
+								<button
+									on:click={compartirReceta}
+									class="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+									>🌐 Pública</button
+								>
+							{/if}
 
-          <h3 class="font-medium">👨‍🍳 Pasos</h3>
-          <ol class="list-decimal ml-5 text-sm">
-            {#each receta.pasos ?? [] as paso}<li>{paso}</li>{/each}
-          </ol>
-        </div>
+							<button
+  on:click={() => dispatch('editar', receta)}
+  class="flex-1 border border-gray-300 py-2 rounded-lg text-sm hover:bg-gray-100">
+  ✏️ Editar
+</button>
 
-        {#if mensaje}
-          <p class="text-sm text-green-600 mb-2">{mensaje}</p>
-        {/if}
-
-        <div class="flex flex-col gap-2">
-          <button
-            on:click={compartirReceta}
-            disabled={yaCompartida}
-            class="w-full py-2 px-4 rounded-lg text-sm font-semibold transition-colors
-              {yaCompartida
-                ? 'bg-gray-400 text-white cursor-not-allowed'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'}"
-          >
-            {yaCompartida ? 'Ya se compartió' : 'Compartir'}
-          </button>
-
-          <button on:click={habilitarEdicion} class="w-full bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 text-sm font-semibold">
-            Editar
-          </button>
-        </div>
-      {/if}
-
-      <button on:click={onClose} class="w-full mt-4 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 text-sm font-semibold">
-        Cerrar
-      </button>
-    </div>
-  </div>
+							
+						</div>
+					{:else}
+						<!-- 📥 Botón de guardar centrado -->
+						<div class="mt-6 flex justify-center">
+							<button
+								on:click={() => dispatch('guardar', receta)}
+								class="w-full max-w-[300px] rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+								>📥 Guardar receta</button
+							>
+						</div>
+					{/if}
+				</div>
+			</div>
+		</div>
+	</div>
 {/if}

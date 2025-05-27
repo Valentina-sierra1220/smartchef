@@ -13,8 +13,10 @@ const config = {
 		// See https://svelte.dev/docs/kit/adapters for more information about adapters.
 		adapter: adapter(),  // ← COMA AQUÍ
 		alias: {
-			$lib: 'src/lib'
-		}
+  			$lib: 'src/lib',
+  			$model: 'src/model'
+}
+
 	}
 };
 

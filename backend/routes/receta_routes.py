@@ -1,12 +1,21 @@
-# routes/receta_routes.py
+#routes/receta_routes.py
 
+import os
+import json
+from flask import current_app
+from flask import send_from_directory
+from werkzeug.utils import secure_filename
 from flask import Blueprint, request, jsonify
 from config.database import SessionLocal
 from models.receta import Receta
-from models.user import Usuario
+#from models.user import Usuario
 from models.receta_guardada import RecetaGuardada
+from models.imagen_receta import ImagenReceta
 
 receta_bp = Blueprint("recetas", __name__)
+
+
+
 
 
 @receta_bp.route("/recetas", methods=["POST"])
@@ -37,7 +46,39 @@ def crear_receta():
         )
         db.add(receta)
         db.commit()
-        return jsonify({"mensaje": "Receta creada correctamente"})
+        db.refresh(receta)  # 🔄 importante para obtener el id recién generado
+
+        return jsonify({
+            "mensaje": "Receta creada correctamente",
+            "id_receta": receta.id
+        }), 201
+    finally:
+        db.close()
+
+@receta_bp.route("/recetas/<int:id_receta>", methods=["PUT"])
+def actualizar_receta(id_receta):
+    data = request.json
+
+    db = SessionLocal()
+    try:
+        receta = db.query(Receta).filter_by(id=id_receta).first()
+
+        if not receta:
+            return jsonify({"error": "Receta no encontrada"}), 404
+
+        # Actualizar campos si vienen en el payload
+        receta.nombre = data.get("nombre", receta.nombre)
+        receta.descripcion = data.get("descripcion", receta.descripcion)
+        receta.instrucciones = data.get("instrucciones", receta.instrucciones)
+        receta.tiempo = data.get("tiempo", receta.tiempo)
+        receta.porciones = data.get("porciones", receta.porciones)
+        receta.publica = data.get("publica", receta.publica)
+
+        db.commit()
+        return jsonify({"mensaje": "Receta actualizada correctamente"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": f"Error al actualizar receta: {str(e)}"}), 500
     finally:
         db.close()
 
@@ -46,20 +87,39 @@ def crear_receta():
 def recetas_personales():
     id_usuario = request.args.get("id_usuario")
 
+    if not id_usuario:
+        return jsonify({"error": "Falta el id_usuario"}), 400
+
     db = SessionLocal()
     try:
-        recetas = db.query(Receta).filter_by(id_usuario=id_usuario).all()
+        recetas = (
+            db.query(Receta)
+            .filter_by(id_usuario=id_usuario)
+            .order_by(Receta.id.desc())  # O usa .fecha_creacion.desc() si la tienes
+            .limit(20)
+            .all()
+        )
+
         resultado = []
-        for r in recetas:
+        for receta in recetas:
+            imagenes = db.query(ImagenReceta).filter_by(id_receta=receta.id).all()
             resultado.append({
-                "id": r.id,
-                "nombre": r.nombre,
-                "descripcion": r.descripcion,
-                "publica": r.publica
+                "id": receta.id,
+                "nombre": receta.nombre,
+                "descripcion": receta.descripcion,
+                "instrucciones": receta.instrucciones,
+                "tiempo": receta.tiempo,
+                "porciones": receta.porciones,
+                "publica": receta.publica,
+                "id_usuario": receta.id_usuario,
+                "imagenes": [img.url for img in imagenes]
             })
+
         return jsonify(resultado)
     finally:
         db.close()
+
+
 
 @receta_bp.route("/feed", methods=["GET"])
 def feed_publico():
@@ -129,4 +189,79 @@ def recetas_guardadas():
         return jsonify(resultado)
     finally:
         db.close()
+
+
+
+@receta_bp.route('/imagenes', methods=['GET'])
+def obtener_imagenes():
+    """
+    Devuelve la lista de URLs de imágenes guardadas en static/imagenes.json
+    """
+    ruta_json = os.path.join(current_app.root_path, 'static', 'imagenes.json')
+
+    try:
+        with open(ruta_json, 'r', encoding='utf-8') as archivo:
+            datos = json.load(archivo)
+    except (FileNotFoundError, json.JSONDecodeError):
+        datos = []
+
+    return jsonify({'imagenes': datos})
+
+
+# Carpeta de destino para las imágenes
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@receta_bp.route('/upload', methods=['POST'])
+def subir_imagenes():
+    upload_folder = os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads')
+    upload_folder = os.path.abspath(upload_folder)
+
+    if 'imagenes' not in request.files:
+        return jsonify({'error': 'No se encontró ninguna imagen'}), 400
+
+    files = request.files.getlist('imagenes')
+    urls = []
+
+    for file in files:
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            save_path = os.path.join(upload_folder, filename)
+
+            counter = 1
+            base, ext = os.path.splitext(filename)
+            while os.path.exists(save_path):
+                filename = f"{base}_{counter}{ext}"
+                save_path = os.path.join(upload_folder, filename)
+                counter += 1
+
+            file.save(save_path)
+
+            # Devuelve la ruta accesible por el frontend
+            url = f'/static/uploads/{filename}'
+            urls.append(url)
+
+    return jsonify({'urls': urls}), 200
+
+@receta_bp.route('/imagenes-receta', methods=['POST'])
+def guardar_imagenes_receta():
+    data = request.json
+    id_receta = data.get('id_receta')
+    urls = data.get('urls', [])
+
+    if not id_receta or not urls:
+        return jsonify({'error': 'Se requieren id_receta y lista de urls'}), 400
+
+    db = SessionLocal()
+    try:
+        for url in urls:
+            imagen = ImagenReceta(url=url, id_receta=id_receta)
+            db.add(imagen)
+        db.commit()
+        return jsonify({'mensaje': 'Imágenes guardadas correctamente'}), 201
+    finally:
+        db.close()
+
 
